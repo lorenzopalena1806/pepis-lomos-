@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://pepis-lomos-1.onrender.com';
-
+const API_URL = 'https://pepis-lomos-1.onrender.com/api/';
 export const getMenu = async () => {
   try {
     const response = await axios.get(`${API_URL}menu/`);
