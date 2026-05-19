@@ -1,96 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { getOrders, updateOrderStatus } from '../services/api';
 
-export default function KitchenView() {
+export const KitchenView = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchOrders = async () => {
-    try {
-      const res = await axios.get('http://localhost:8000/api/kitchen/orders/');
-      setOrders(res.data);
-    } catch (error) {
-      console.error("Error fetching kitchen orders:", error);
-    } finally {
-      setLoading(false);
-    }
+  // Carga los pedidos y filtra los terminados
+  const loadOrders = async () => {
+    const data = await getOrders();
+    const activeOrders = data.filter(order => order.status !== 'entregado' && order.status !== 'cancelado');
+    setOrders(activeOrders);
+    setLoading(false);
   };
 
+  // El "Radar": actualiza la pantalla sola cada 10 segundos
   useEffect(() => {
-    fetchOrders();
-    // Auto-refresh cada 10 segundos
-    const interval = setInterval(fetchOrders, 10000);
+    loadOrders();
+    const interval = setInterval(loadOrders, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const changeStatus = async (orderId, newStatus) => {
+  // Cambia el estado al tocar el botón
+  const handleStatusChange = async (orderId, nextStatus) => {
     try {
-      await axios.post(`http://localhost:8000/api/kitchen/orders/${orderId}/status/`, { estado: newStatus });
-      fetchOrders(); // Recargar después de cambiar
+      await updateOrderStatus(orderId, nextStatus);
+      loadOrders(); 
     } catch (error) {
-      alert("Error al actualizar el estado");
+      alert("No se pudo actualizar el estado del pedido");
     }
   };
 
+  // Acomoda la hora para que se lea fácil
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Colores de la tarjeta
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'pendiente': return { borderTop: '8px solid #dc3545', bg: '#fff5f5' }; 
+      case 'preparando': return { borderTop: '8px solid #ffc107', bg: '#fffdf0' }; 
+      default: return { borderTop: '8px solid #6c757d', bg: '#f8f9fa' };
+    }
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: '50px', color: '#fff' }}>Cargando KDS...</div>;
+
   return (
-    <div style={{ padding: '2rem', minHeight: '100vh', backgroundColor: '#0f172a', color: 'white' }}>
-      <h1 style={{ color: 'var(--primary-mustard)', marginBottom: '2rem', textAlign: 'center' }}>🔪 Comandera Pepi's</h1>
+    <div style={{ padding: '20px', backgroundColor: '#1e1e1e', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+      <h1 style={{ color: '#ffc107', textAlign: 'center', marginBottom: '30px' }}>👨‍🍳 PANTALLA DE COCINA</h1>
       
-      {loading && <p>Cargando comandas...</p>}
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-        {orders.map(order => (
-          <div key={order.id} style={{ 
-            backgroundColor: order.estado === 'PREPARANDO' ? '#334155' : '#1e293b', 
-            borderRadius: '12px', 
-            padding: '1.5rem',
-            border: order.estado === 'PREPARANDO' ? '2px solid var(--primary-mustard)' : '2px solid transparent'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #475569', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>#{order.id}</span>
-              <span style={{ color: '#94a3b8' }}>{order.hora}</span>
-            </div>
-            
-            <p style={{ marginBottom: '1rem', color: '#cbd5e1' }}><strong>Cliente:</strong> {order.cliente} ({order.tipo_entrega})</p>
-            
-            <ul style={{ listStyleType: 'none', padding: 0, marginBottom: '2rem' }}>
-              {order.items.map((item, idx) => (
-                <li key={idx} style={{ marginBottom: '0.5rem', fontSize: '1.2rem' }}>
-                  <strong>{item.cantidad}x</strong> {item.producto}
-                  {item.modificadores.length > 0 && (
-                    <div style={{ fontSize: '0.9rem', color: '#fbbf24', marginLeft: '1.5rem' }}>
-                      {item.modificadores.map(m => `+ ${m}`).join(', ')}
-                    </div>
+      {orders.length === 0 ? (
+        <p style={{ color: '#aaa', textAlign: 'center', fontSize: '1.2rem' }}>No hay pedidos pendientes. ¡Plancha limpia!</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
+          {orders.map((order) => {
+            const style = getStatusStyle(order.status);
+            return (
+              <div 
+                key={order.id} 
+                style={{ 
+                  backgroundColor: style.bg, 
+                  borderRadius: '8px', 
+                  padding: '15px', 
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+                  borderTop: style.borderTop,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '5px' }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#000' }}>Pedido #{order.id}</span>
+                    <span style={{ color: '#555', fontWeight: 'bold' }}>🕒 {formatTime(order.created_at)}</span>
+                  </div>
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ 
+                      backgroundColor: order.status === 'pendiente' ? '#dc3545' : '#ffc107', 
+                      color: order.status === 'pendiente' ? '#fff' : '#000',
+                      padding: '3px 8px', 
+                      borderRadius: '4px', 
+                      fontSize: '0.85rem', 
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase'
+                    }}>
+                      {order.status}
+                    </span>
+                  </div>
+
+                  <div style={{ marginBottom: '15px' }}>
+                    <h4 style={{ margin: '0 0 5px 0', color: '#333' }}>Items:</h4>
+                    <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                      {order.items?.map((item, idx) => (
+                        <li key={idx} style={{ marginBottom: '8px', color: '#000' }}>
+                          <strong style={{ fontSize: '1.05rem' }}>{item.quantity}x {item.product_name}</strong>
+                          
+                          {item.modifiers && item.modifiers.length > 0 && (
+                            <div style={{ fontSize: '0.9rem', color: '#666', fontStyle: 'italic', marginTop: '2px' }}>
+                              Agregados: {item.modifiers.map(mod => mod.name).join(', ')}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  {order.status === 'pendiente' && (
+                    <button 
+                      onClick={() => handleStatusChange(order.id, 'preparando')}
+                      style={{ flex: 1, backgroundColor: '#28a745', color: '#fff', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      👨‍🍳 Empezar a Hacer
+                    </button>
                   )}
-                </li>
-              ))}
-            </ul>
-
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              {order.estado === 'PENDIENTE' && (
-                <button 
-                  onClick={() => changeStatus(order.id, 'PREPARANDO')}
-                  style={{ flex: 1, padding: '0.8rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '1.1rem' }}>
-                  Empezar a Preparar
-                </button>
-              )}
-              {order.estado === 'PREPARANDO' && (
-                <button 
-                  onClick={() => changeStatus(order.id, 'LISTO')}
-                  style={{ flex: 1, padding: '0.8rem', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '1.1rem' }}>
-                  ¡Listo para Entregar!
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {!loading && orders.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#94a3b8', fontSize: '1.5rem', marginTop: '3rem' }}>
-            No hay pedidos pendientes. ¡A descansar! ☕
-          </div>
-        )}
-      </div>
+                  {order.status === 'preparando' && (
+                    <button 
+                      onClick={() => handleStatusChange(order.id, 'entregado')}
+                      style={{ flex: 1, backgroundColor: '#007bff', color: '#fff', border: 'none', padding: '10px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      ✅ ¡Listo! Entregar
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-}
+};

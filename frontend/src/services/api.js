@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_URL = 'https://pepis-lomos-1.onrender.com/api/';
+
 export const getMenu = async () => {
   try {
     const response = await axios.get(`${API_URL}menu/`);
@@ -28,5 +29,27 @@ export const submitCheckout = async (checkoutData) => {
   } catch (error) {
     console.error("Error during checkout:", error);
     throw error.response?.data || error;
+  }
+};
+
+// Traer todos los pedidos para la cocina
+export const getOrders = async () => {
+  try {
+    const response = await axios.get(`${API_URL}orders/`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    return [];
+  }
+};
+
+// Actualizar el estado de un pedido (Pendiente -> Preparando -> Entregado)
+export const updateOrderStatus = async (orderId, newStatus) => {
+  try {
+    const response = await axios.patch(`${API_URL}orders/${orderId}/`, { status: newStatus });
+    return response.data;
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    throw error;
   }
 };
